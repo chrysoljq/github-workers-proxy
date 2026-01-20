@@ -218,8 +218,18 @@ export default {
           if (modifiedBody.includes(rawUpstreamBase)) {
             modifiedBody = modifiedBody.replaceAll(rawUpstreamBase, rawWorkerUrlBase);
             bodyModified = true;
-            // console.log(`Performed URL rewrite (${rawUpstreamBase} -> ${rawWorkerUrlBase}) for: ${pathname}`);
           }
+
+          // 3. *** 新增：替换 HTML 中的根相对路径 (例如 action="/search", href="/login") ***
+          // 匹配 href="/...", action="/...", src="/...", data-url="/..."
+          // 排除协议相对路径 (//)
+          // 排除 MAIN_PROXY_PREFIX 本身 (防止重复替换)
+          const relativePathRegex = /(href|action|src|data-url)(=["'])\/(?!\/)/g;
+          if (relativePathRegex.test(modifiedBody)) {
+            modifiedBody = modifiedBody.replace(relativePathRegex, `$1$2${MAIN_PROXY_PREFIX}/`);
+            bodyModified = true;
+          }
+          // console.log(`Performed URL rewrite (${rawUpstreamBase} -> ${rawWorkerUrlBase}) for: ${pathname}`);
 
           // --- 仅当内容是 HTML 时，才注入横幅和修改标题 ---
           if (contentType.toLowerCase().includes('text/html')) {
