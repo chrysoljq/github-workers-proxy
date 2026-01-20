@@ -7,7 +7,7 @@ const RAW_UPSTREAM_HOST = 'raw.githubusercontent.com';
 const RAW_PROXY_PREFIX = '/raw-content';
 
 // Authentication Configuration
-const PROXY_PASSWORD = 'your-secret-password'; // CHANGE THIS!
+const PROXY_PASSWORD = 'iloveyou'; // CHANGE THIS!
 const AUTH_COOKIE_NAME = '__gh_proxy_auth';
 const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 Days
 
