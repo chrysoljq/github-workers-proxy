@@ -1,0 +1,11 @@
+name = "github-workers-proxy"
+main = "workers.js"
+compatibility_date = "2024-04-05"
+
+# 绑定自定义域名 (可选)
+# routes = [
+#   { pattern = "git.your-domain.com", custom_domain = true }
+# ]
+
+[observability]
+enabled = true
