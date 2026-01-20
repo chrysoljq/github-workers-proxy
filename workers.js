@@ -8,6 +8,7 @@ const UPSTREAM_HOST = 'github.com';
 const RAW_UPSTREAM_HOST = 'raw.githubusercontent.com';
 // 在 Worker 上代理 Raw 内容的路径前缀
 const RAW_PROXY_PREFIX = '/raw-content'; // 必须以 / 开头
+const MAIN_PROXY_PREFIX = '/github'; // 必须以 / 开头
 
 // 需要屏蔽的主 GitHub 站点路径前缀或完全匹配路径
 const BLOCKED_PATHS = [
@@ -44,6 +45,7 @@ export default {
     const url = new URL(request.url);
     const { pathname, search } = url;
     const workerOrigin = url.origin; // e.g., "https://github.iqach.top"
+    const mainWorkerUrlBase = `${workerOrigin}${MAIN_PROXY_PREFIX}`; // e.g., "https://github.iqach.top/github"
     const upstreamBase = `https://${UPSTREAM_HOST}`; // "https://github.com"
     const rawUpstreamBase = `https://${RAW_UPSTREAM_HOST}`; // "https://raw.githubusercontent.com"
     const rawWorkerUrlBase = `${workerOrigin}${RAW_PROXY_PREFIX}`; // e.g., "https://github.iqach.top/raw-content"
@@ -107,23 +109,31 @@ export default {
     // --- ********** Raw 内容代理处理结束 ********** ---
 
 
+    // --- 路由检查：必须以 MAIN_PROXY_PREFIX 开头 ---
+    if (!pathname.startsWith(MAIN_PROXY_PREFIX)) {
+      return new Response("Not Found", { status: 404 });
+    }
+
+    // 获取真实路径 (去除前缀)
+    const realPath = pathname.substring(MAIN_PROXY_PREFIX.length) || '/';
+
     // --- 如果不是 Raw 内容请求，则继续处理主 GitHub 站点的代理 ---
 
     // --- 1. 检查是否访问了主站点的被阻止路径 ---
     let isBlocked = BLOCKED_PATHS.some(blockedPath => {
-        return pathname === blockedPath || pathname.startsWith(blockedPath + '/');
+      return realPath === blockedPath || realPath.startsWith(blockedPath + '/');
     });
-     if (!isBlocked && pathname.startsWith('/settings/')) {
-       isBlocked = true;
-     }
-     if (!isBlocked && pathname === '/settings') {
-         isBlocked = BLOCKED_PATHS.includes('/settings');
-     }
+    if (!isBlocked && realPath.startsWith('/settings/')) {
+      isBlocked = true;
+    }
+    if (!isBlocked && realPath === '/settings') {
+      isBlocked = BLOCKED_PATHS.includes('/settings');
+    }
 
     if (isBlocked) {
-      // console.log(`Blocked access attempt to main site path: ${pathname}`);
+      // console.log(`Blocked access attempt to main site path: ${realPath}`);
       return new Response(
-        `Access to the path (${pathname}) is blocked by this proxy for security reasons.`,
+        `Access to the path (${realPath}) is blocked by this proxy for security reasons.`,
         {
           status: 403,
           statusText: 'Forbidden',
@@ -133,7 +143,7 @@ export default {
     }
 
     // --- 2. 构建并发送主站点上游请求 ---
-    const upstreamUrl = `${upstreamBase}${pathname}${search}`;
+    const upstreamUrl = `${upstreamBase}${realPath}${search}`;
     // console.log(`Proxying MAIN site request to: ${upstreamUrl}`);
 
     const requestHeaders = new Headers(request.headers);
@@ -164,7 +174,7 @@ export default {
           try {
             const absoluteLocation = new URL(locationHeader, upstreamUrl).toString();
             // 重写 Location 中的 github.com 和 raw.githubusercontent.com
-            let workerLocation = absoluteLocation.replaceAll(upstreamBase, workerOrigin);
+            let workerLocation = absoluteLocation.replaceAll(upstreamBase, mainWorkerUrlBase);
             workerLocation = workerLocation.replaceAll(rawUpstreamBase, rawWorkerUrlBase); // 新增替换
             responseHeaders.set('Location', workerLocation);
             // console.log(`Rewriting redirect: ${locationHeader} -> ${workerLocation}`);
@@ -200,46 +210,46 @@ export default {
           // *** 核心修改：替换响应体中的上游 URL ***
           // 1. 替换 github.com URL
           if (modifiedBody.includes(upstreamBase)) {
-              modifiedBody = modifiedBody.replaceAll(upstreamBase, workerOrigin);
-              bodyModified = true;
-              // console.log(`Performed URL rewrite (${upstreamBase} -> ${workerOrigin}) for: ${pathname}`);
+            modifiedBody = modifiedBody.replaceAll(upstreamBase, mainWorkerUrlBase);
+            bodyModified = true;
+            // console.log(`Performed URL rewrite (${upstreamBase} -> ${workerOrigin}) for: ${pathname}`);
           }
           // 2. *** 新增：替换 raw.githubusercontent.com URL ***
           if (modifiedBody.includes(rawUpstreamBase)) {
-              modifiedBody = modifiedBody.replaceAll(rawUpstreamBase, rawWorkerUrlBase);
-              bodyModified = true;
-              // console.log(`Performed URL rewrite (${rawUpstreamBase} -> ${rawWorkerUrlBase}) for: ${pathname}`);
+            modifiedBody = modifiedBody.replaceAll(rawUpstreamBase, rawWorkerUrlBase);
+            bodyModified = true;
+            // console.log(`Performed URL rewrite (${rawUpstreamBase} -> ${rawWorkerUrlBase}) for: ${pathname}`);
           }
 
           // --- 仅当内容是 HTML 时，才注入横幅和修改标题 ---
           if (contentType.toLowerCase().includes('text/html')) {
             // ... (注入横幅和修改标题的代码，和之前一样) ...
-             // 1. 修改标题
-             const titleRegex = /<title>(.*?)<\/title>/is;
-             const newTitle = `<title>${TITLE_PREFIX}$1</title>`;
-             if (titleRegex.test(modifiedBody)) {
-                 const oldTitleBody = modifiedBody;
-                 modifiedBody = modifiedBody.replace(titleRegex, newTitle);
-                 if (modifiedBody !== oldTitleBody) {
-                     // console.log(`Modified title for: ${pathname}`);
-                     bodyModified = true;
-                 }
-             }
-             // 2. 注入横幅
-             const bodyTagRegex = /<body[^>]*>/i;
-             const headTagRegex = /<\/head>/i;
-             const oldBannerBody = modifiedBody;
-             if (bodyTagRegex.test(modifiedBody)) {
-                 modifiedBody = modifiedBody.replace(bodyTagRegex, `$&${WARNING_BANNER_HTML}`);
-             } else if (headTagRegex.test(modifiedBody)) {
-                 modifiedBody = modifiedBody.replace(headTagRegex, `</head>${WARNING_BANNER_HTML}`);
-             } else {
-                 // console.warn(`Could not find <body> or </head> tag to inject banner for: ${pathname}`);
-             }
-             if (modifiedBody !== oldBannerBody) {
-                 // console.log(`Injected warning banner for: ${pathname}`);
-                 bodyModified = true;
-             }
+            // 1. 修改标题
+            const titleRegex = /<title>(.*?)<\/title>/is;
+            const newTitle = `<title>${TITLE_PREFIX}$1</title>`;
+            if (titleRegex.test(modifiedBody)) {
+              const oldTitleBody = modifiedBody;
+              modifiedBody = modifiedBody.replace(titleRegex, newTitle);
+              if (modifiedBody !== oldTitleBody) {
+                // console.log(`Modified title for: ${pathname}`);
+                bodyModified = true;
+              }
+            }
+            // 2. 注入横幅
+            const bodyTagRegex = /<body[^>]*>/i;
+            const headTagRegex = /<\/head>/i;
+            const oldBannerBody = modifiedBody;
+            if (bodyTagRegex.test(modifiedBody)) {
+              modifiedBody = modifiedBody.replace(bodyTagRegex, `$&${WARNING_BANNER_HTML}`);
+            } else if (headTagRegex.test(modifiedBody)) {
+              modifiedBody = modifiedBody.replace(headTagRegex, `</head>${WARNING_BANNER_HTML}`);
+            } else {
+              // console.warn(`Could not find <body> or </head> tag to inject banner for: ${pathname}`);
+            }
+            if (modifiedBody !== oldBannerBody) {
+              // console.log(`Injected warning banner for: ${pathname}`);
+              bodyModified = true;
+            }
           }
 
           // --- 如果响应体被修改过，更新响应体和 Content-Length ---
@@ -249,22 +259,22 @@ export default {
             responseHeaders.set('Content-Length', bodyBytes.length.toString());
             // console.log(`Updated Content-Length to ${bodyBytes.length} for modified body: ${pathname}`);
           } else {
-             // ... (处理未修改情况的代码，和之前一样) ...
-             // console.log(`HTML/JS detected for ${pathname}, but no modifications were applied. Serving read text.`);
-             responseBody = originalBody;
-             const bodyBytes = new TextEncoder().encode(responseBody);
-             const originalLength = upstreamResponse.headers.get('Content-Length');
-             if (originalLength && parseInt(originalLength) !== bodyBytes.length) {
-                 // console.warn(`Original Content-Length (${originalLength}) doesn't match re-encoded body length (${bodyBytes.length}) for ${pathname}. Setting new length.`);
-                 responseHeaders.set('Content-Length', bodyBytes.length.toString());
-             } else if (!originalLength) {
-                 responseHeaders.set('Content-Length', bodyBytes.length.toString());
-             }
+            // ... (处理未修改情况的代码，和之前一样) ...
+            // console.log(`HTML/JS detected for ${pathname}, but no modifications were applied. Serving read text.`);
+            responseBody = originalBody;
+            const bodyBytes = new TextEncoder().encode(responseBody);
+            const originalLength = upstreamResponse.headers.get('Content-Length');
+            if (originalLength && parseInt(originalLength) !== bodyBytes.length) {
+              // console.warn(`Original Content-Length (${originalLength}) doesn't match re-encoded body length (${bodyBytes.length}) for ${pathname}. Setting new length.`);
+              responseHeaders.set('Content-Length', bodyBytes.length.toString());
+            } else if (!originalLength) {
+              responseHeaders.set('Content-Length', bodyBytes.length.toString());
+            }
           }
 
         } catch (err) {
           // console.error("Error reading or modifying main site HTML/JS body:", err);
-          return new Response("Error processing main site content.", { status: 500, headers: {'Content-Type': 'text/plain'} });
+          return new Response("Error processing main site content.", { status: 500, headers: { 'Content-Type': 'text/plain' } });
         }
       } else {
         // console.log(`Non-HTML/JS content type (${contentType || 'N/A'}) for main site path ${pathname}, passing through body.`);
@@ -325,11 +335,11 @@ function handleOptions(request, workerOrigin) {
  * @param {string} workerOrigin - Worker 的源
  */
 function addCorsHeaders(headers, workerOrigin) {
-    headers.set('Access-Control-Allow-Origin', workerOrigin);
-    headers.set('Access-Control-Allow-Methods', 'GET,HEAD,POST,PUT,DELETE,OPTIONS');
-    headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Range');
-    // headers.set('Access-Control-Expose-Headers', 'Content-Length, Content-Range'); // Optional
-    // headers.set('Access-Control-Allow-Credentials', 'true'); // Optional
-    // headers.set('Vary', 'Origin'); // Optional, but good practice
-    // console.log(`Added CORS headers for origin: ${workerOrigin}`);
+  headers.set('Access-Control-Allow-Origin', workerOrigin);
+  headers.set('Access-Control-Allow-Methods', 'GET,HEAD,POST,PUT,DELETE,OPTIONS');
+  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Range');
+  // headers.set('Access-Control-Expose-Headers', 'Content-Length, Content-Range'); // Optional
+  // headers.set('Access-Control-Allow-Credentials', 'true'); // Optional
+  // headers.set('Vary', 'Origin'); // Optional, but good practice
+  // console.log(`Added CORS headers for origin: ${workerOrigin}`);
 }
