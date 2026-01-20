@@ -11,21 +11,18 @@
 
 ## 部署方法
 
-### 1. 使用 Wrangler (推荐)
-已配置 `wrangler.toml`，可直接部署：
-```bash
-# 安装依赖
-npm install
+### 1. 手动部署 (网页端 - 推荐)
+最简单的方式，无需安装任何工具。
+1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/)。
+2. 进入 **Workers & Pages** -> **Create Application** -> **Create Worker**。
+3. 随意命名并点击 **Deploy** (先部署个空壳)。
+4. 点击 **Edit code** 进入代码编辑器。
+5. 将仓库中的 `workers.js` 代码**全部复制粘贴**覆盖原有代码。
+6. **修改密码**：在编辑器中找到 `const PROXY_PASSWORD = 'your-secret-password';`，将密码改为你自己设定的密码。
+7. 点击右上角 **Deploy** 保存。
 
-# 修改 workers.js 中的密码
-# const PROXY_PASSWORD = 'your-secret-password';
-
-# 部署
-npx wrangler deploy
-```
-
-### 2. 手动部署
-复制 `workers.js` 的全部内容到 Cloudflare Workers 编辑器中，保存并部署。
+### 2. 使用 Wrangler (命令行)
+配置了 `wrangler.toml` 后也可使用 CLI 部署：
 
 ## 使用说明
 
