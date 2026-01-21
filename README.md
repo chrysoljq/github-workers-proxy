@@ -49,6 +49,10 @@ Cloudflare 现在支持直接连接 GitHub 仓库进行自动构建和部署，�
 Raw 文件可以通过 `/raw-content/` 路径访问：
 `https://gh.example.com/raw-content/User/Repo/branch/file.txt`
 
+### Git 直连
+Git 客户端可以直接使用代理进行克隆：
+`git clone https://gh.example.com/User/Repo.git?token=your-secret-password`
+
 ## 免责声明
 - 本项目仅供学习和个人开发测试使用（如加速 Git Clone）。
 - **请勿**用于登录个人账号或处理敏感数据。
