@@ -168,7 +168,7 @@ export default {
 
       const rawRequestHeaders = new Headers(request.headers);
       rawRequestHeaders.set('Host', RAW_UPSTREAM_HOST);
-      ['cf-connecting-ip', 'cf-ipcountry', 'cf-ray', 'cf-visitor'].forEach(h => rawRequestHeaders.delete(h));
+      ['cf-connecting-ip', 'cf-ipcountry', 'cf-ray', 'cf-visitor', 'Authorization'].forEach(h => rawRequestHeaders.delete(h));
 
       try {
         const rawResponse = await fetch(rawUpstreamUrl, {
@@ -200,7 +200,7 @@ export default {
     const upstreamUrl = `https://${UPSTREAM_HOST}${pathname}${url.search}`;
     const reqHeaders = new Headers(request.headers);
     reqHeaders.set('Host', UPSTREAM_HOST);
-    ['cf-connecting-ip', 'cf-ipcountry', 'cf-ray', 'cf-visitor'].forEach(h => reqHeaders.delete(h));
+    ['cf-connecting-ip', 'cf-ipcountry', 'cf-ray', 'cf-visitor', 'Authorization'].forEach(h => reqHeaders.delete(h));
 
     try {
       const upstreamResponse = await fetch(upstreamUrl, {
