@@ -194,13 +194,27 @@ export default {
         let text = await upstreamResponse.text();
         let modified = false;
 
-        // Simple URL replacement
-        if (text.includes(`https://${UPSTREAM_HOST}`)) {
-          text = text.replaceAll(`https://${UPSTREAM_HOST}`, workerOrigin);
+        // Robust URL replacement (handles https:// and https:\/\/ for JSON)
+        const generateReplacement = (match, prefix, upstream, replacement) => {
+          if (prefix === '\\/\\/') {
+            return replacement.replace('://', ':\\/\\/');
+          }
+          return replacement;
+        };
+
+        const upstreamRegex = new RegExp(`https:(//|\\\\/\\\\/)${UPSTREAM_HOST}`, 'g');
+        if (upstreamRegex.test(text)) {
+          text = text.replace(upstreamRegex, (match, prefix) =>
+            generateReplacement(match, prefix, UPSTREAM_HOST, workerOrigin)
+          );
           modified = true;
         }
-        if (text.includes(`https://${RAW_UPSTREAM_HOST}`)) {
-          text = text.replaceAll(`https://${RAW_UPSTREAM_HOST}`, `${workerOrigin}${RAW_PROXY_PREFIX}`);
+
+        const rawRegex = new RegExp(`https:(//|\\\\/\\\\/)${RAW_UPSTREAM_HOST}`, 'g');
+        if (rawRegex.test(text)) {
+          text = text.replace(rawRegex, (match, prefix) =>
+            generateReplacement(match, prefix, RAW_UPSTREAM_HOST, `${workerOrigin}${RAW_PROXY_PREFIX}`)
+          );
           modified = true;
         }
 
