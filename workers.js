@@ -63,28 +63,38 @@ export default {
     // 1. Handle CORS Preflight
     if (request.method === 'OPTIONS') return handleOptions(request, workerOrigin);
 
-    // 2. Authentication Check (Cookie logic)
-    // EXCEPTION: Allow /raw-content without auth if desired? 
-    // Currently protecting EVERYTHING including raw content logic for safety.
-    const cookieHeader = request.headers.get('Cookie') || '';
-    const cookies = parseCookies(cookieHeader);
-    const isAuth = cookies[AUTH_COOKIE_NAME] === PROXY_PASSWORD; // Simple equality check (or use hash)
+    // 2. Authentication Check & Token Handling
+    const token = url.searchParams.get('token');
+    const isTokenValid = token === PROXY_PASSWORD;
+    const userAgent = request.headers.get('User-Agent') || '';
+    // Git clients usually send 'git/x.y.z'. Also check for .git path or standard git services.
+    const isGitClient = userAgent.startsWith('git/') || pathname.endsWith('.git') || pathname.includes('/info/refs') || pathname.includes('/git-upload-pack');
 
     // Handle Login via URL Token (?token=PASSWORD)
-    if (url.searchParams.has('token')) {
-      const token = url.searchParams.get('token');
-      if (token === PROXY_PASSWORD) {
-        // Set cookie and redirect to clean URL
-        url.searchParams.delete('token');
-        const newUrl = url.toString();
-        return new Response(null, {
-          status: 302,
-          headers: {
-            'Location': newUrl,
-            'Set-Cookie': `${AUTH_COOKIE_NAME}=${PROXY_PASSWORD}; Path=/; Max-Age=${AUTH_COOKIE_MAX_AGE}; Secure; HttpOnly; SameSite=Lax`
-          }
-        });
-      }
+    // Behavior: Redirect browsers to clean URL, but allow Git clients to pass through with token.
+    if (isTokenValid && !isGitClient) {
+      // Set cookie and redirect to clean URL
+      url.searchParams.delete('token');
+      const newUrl = url.toString();
+      return new Response(null, {
+        status: 302,
+        headers: {
+          'Location': newUrl,
+          'Set-Cookie': `${AUTH_COOKIE_NAME}=${PROXY_PASSWORD}; Path=/; Max-Age=${AUTH_COOKIE_MAX_AGE}; Secure; HttpOnly; SameSite=Lax`
+        }
+      });
+    }
+
+    const cookieHeader = request.headers.get('Cookie') || '';
+    const cookies = parseCookies(cookieHeader);
+    const isCookieAuth = cookies[AUTH_COOKIE_NAME] === PROXY_PASSWORD;
+
+    // Authenticated if: Valid Cookie OR (Git Client + Valid Token)
+    const isAuth = isCookieAuth || (isTokenValid && isGitClient);
+
+    // Remove token from URL if valid, so we don't upstream it to GitHub (cleaner)
+    if (isTokenValid && isAuth) {
+      url.searchParams.delete('token');
     }
 
     // Handle POST Login
@@ -117,7 +127,7 @@ export default {
     // 3. Raw Content Proxy
     if (pathname.startsWith(RAW_PROXY_PREFIX + '/')) {
       const rawPath = pathname.substring(RAW_PROXY_PREFIX.length);
-      const rawUpstreamUrl = `https://${RAW_UPSTREAM_HOST}${rawPath}${search}`;
+      const rawUpstreamUrl = `https://${RAW_UPSTREAM_HOST}${rawPath}${url.search}`;
 
       const rawRequestHeaders = new Headers(request.headers);
       rawRequestHeaders.set('Host', RAW_UPSTREAM_HOST);
@@ -150,7 +160,7 @@ export default {
       return new Response(`Path ${pathname} is blocked.`, { status: 403 });
     }
 
-    const upstreamUrl = `https://${UPSTREAM_HOST}${pathname}${search}`;
+    const upstreamUrl = `https://${UPSTREAM_HOST}${pathname}${url.search}`;
     const reqHeaders = new Headers(request.headers);
     reqHeaders.set('Host', UPSTREAM_HOST);
     ['cf-connecting-ip', 'cf-ipcountry', 'cf-ray', 'cf-visitor'].forEach(h => reqHeaders.delete(h));
