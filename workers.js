@@ -7,7 +7,7 @@ const RAW_UPSTREAM_HOST = 'raw.githubusercontent.com';
 const RAW_PROXY_PREFIX = '/raw-content';
 
 // Authentication Configuration
-const PROXY_PASSWORD = 'iloveyou'; // CHANGE THIS!
+const DEFAULT_PROXY_PASSWORD = 'iloveyou'; // CHANGE THIS if using manual deployment
 const AUTH_COOKIE_NAME = '__gh_proxy_auth';
 const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 Days
 
@@ -58,6 +58,7 @@ export default {
     const url = new URL(request.url);
     const { pathname, search } = url;
     const workerOrigin = url.origin;
+    const PROXY_PASSWORD = env.PROXY_PASSWORD || DEFAULT_PROXY_PASSWORD;
 
     // 1. Handle CORS Preflight
     if (request.method === 'OPTIONS') return handleOptions(request, workerOrigin);

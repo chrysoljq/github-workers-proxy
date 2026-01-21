@@ -11,18 +11,29 @@
 
 ## 部署方法
 
-### 1. 手动部署 (网页端 - 推荐)
-最简单的方式，无需安装任何工具。
-1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/)。
-2. 进入 **Workers & Pages** -> **Create Application** -> **Create Worker**。
-3. 随意命名并点击 **Deploy** (先部署个空壳)。
-4. 点击 **Edit code** 进入代码编辑器。
-5. 将仓库中的 `workers.js` 代码**全部复制粘贴**覆盖原有代码。
-6. **修改密码**：在编辑器中找到 `const PROXY_PASSWORD = 'your-secret-password';`，将密码改为你自己设定的密码。
-7. 点击右上角 **Deploy** 保存。
+### 1. 部署方法 (推荐：连接 Git 仓库)
+Cloudflare 现在支持直接连接 GitHub 仓库进行自动构建和部署，这是最推荐的方式，可以实现代码自动同步。
 
-### 2. 使用 Wrangler (命令行)
-配置了 `wrangler.toml` 后也可使用 CLI 部署：
+**1.1 Access Cloudflare Dashboard**
+- 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/)
+- 选择左侧菜单的 **Workers 和 Pages**
+- 点击 **创建应用程序**
+- 选择 **Connect to GitHub** 或者导入现有仓库
+
+**1.2 Connect GitHub Repository**
+- 如果首次使用，需要授权 Cloudflare 访问 GitHub
+- 选择您 Fork 的 `github-workers-proxy` 仓库
+- 所有设置保持默认即可
+
+**1.3 Set Password**
+- 部署完成后，进入 Worker 的 **Settings** -> **Variables**
+- 点击 **Add Variable**（可选，默认密码为 `iloveyou`）
+- Variable Name: `PROXY_PASSWORD`
+- Value: (你的密码)
+- 不需要重新部署，变量变更后会自动生效。
+
+### 2. 手动部署
+手动复制 `workers.js` 文件到 Cloudflare Worker 中。
 
 ## 使用说明
 
