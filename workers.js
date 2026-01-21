@@ -82,9 +82,26 @@ export default {
     // Git clients usually send 'git/x.y.z'. Also check for .git path or standard git services.
     const isGitClient = userAgent.startsWith('git/') || pathname.endsWith('.git') || pathname.includes('/info/refs') || pathname.includes('/git-upload-pack');
 
+    // Basic Auth Support (Authorization: Basic base64(user:password))
+    const authHeader = request.headers.get('Authorization');
+    let isBasicAuth = false;
+    if (authHeader && authHeader.startsWith('Basic ')) {
+      try {
+        const base64 = authHeader.substring(6);
+        const decoded = atob(base64); // user:password
+        const separator = decoded.indexOf(':');
+        if (separator !== -1) {
+          const password = decoded.substring(separator + 1);
+          if (password === PROXY_PASSWORD) {
+            isBasicAuth = true;
+          }
+        }
+      } catch (e) { }
+    }
+
     // Handle Login via URL Token (?token=PASSWORD)
     // Behavior: Redirect browsers to clean URL, but allow Git clients to pass through with token.
-    if (isTokenValid && !isGitClient) {
+    if (isTokenValid && !isGitClient && !isBasicAuth) {
       // Set cookie and redirect to clean URL
       url.searchParams.delete('token');
       const newUrl = url.toString();
@@ -101,8 +118,8 @@ export default {
     const cookies = parseCookies(cookieHeader);
     const isCookieAuth = cookies[AUTH_COOKIE_NAME] === PROXY_PASSWORD;
 
-    // Authenticated if: Valid Cookie OR (Git Client + Valid Token)
-    const isAuth = isCookieAuth || (isTokenValid && isGitClient);
+    // Authenticated if: Valid Cookie OR (Git Client + Valid Token) OR Basic Auth
+    const isAuth = isCookieAuth || (isTokenValid && isGitClient) || isBasicAuth;
 
     // Remove token from URL if valid, so we don't upstream it to GitHub (cleaner)
     if (isTokenValid && isAuth) {
@@ -128,6 +145,14 @@ export default {
 
     // Block if not authenticated
     if (!isAuth) {
+      // If it looks like a Git client or Basic Auth attempt, send WWW-Authenticate
+      if (isGitClient || authHeader) {
+        return new Response('Unauthorized', {
+          status: 401,
+          headers: { 'WWW-Authenticate': 'Basic realm="GitHub Proxy"' }
+        });
+      }
+
       return new Response(LOGIN_PAGE_HTML, {
         status: 401,
         headers: { 'Content-Type': 'text/html; charset=utf-8' }

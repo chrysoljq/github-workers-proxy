@@ -41,8 +41,26 @@ Cloudflare 现在支持直接连接 GitHub 仓库进行自动构建和部署，�
 直接访问代理域名（如 `https://gh.example.com`），会显示登录页面。输入在 `workers.js` 中配置的 `PROXY_PASSWORD` 即可进入。
 登录成功后会设置 Cookie（有效期 7 天），之后也可无感访问。
 
-### 快捷访问 (Token)
-可以在 URL 后直接拼接 token 参数进行快捷登录：
+### 命令行 / Git 认证 (推荐)
+
+支持标准的 HTTP Basic Auth，用户名为任意字符（推荐使用 `token`），密码为你的 `PROXY_PASSWORD`。
+这样可以避免 URL 中携带 token，且下载文件时不会影响文件名。
+
+```bash
+# Git Clone (带密码)
+git clone https://any:your-password@gh.example.com/User/Repo.git
+
+# 或者直接 clone，Git 会提示输入用户名密码
+git clone https://gh.example.com/User/Repo.git
+# Username: (任意)
+# Password: (你的密码)
+
+# wget 下载文件
+wget --http-user=any --http-password=your-password https://gh.example.com/archive.zip
+```
+
+### 快捷访问 (URL Token)
+可以在 URL 后直接拼接 token 参数进行快捷登录（不推荐用于下载文件）：
 `https://gh.example.com/?token=your-secret-password`
 
 ### Raw 文件
