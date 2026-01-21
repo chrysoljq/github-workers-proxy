@@ -56,7 +56,19 @@ const LOGIN_PAGE_HTML = `
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    const { pathname, search } = url;
+
+    // Fix: Handle Git appending path to token param (e.g. ?token=pw/info/refs)
+    let tokenParam = url.searchParams.get('token');
+    if (tokenParam && tokenParam.includes('/')) {
+      const splitIndex = tokenParam.indexOf('/');
+      const realToken = tokenParam.substring(0, splitIndex);
+      const extraPath = tokenParam.substring(splitIndex);
+
+      url.searchParams.set('token', realToken);
+      url.pathname += extraPath;
+    }
+
+    const { pathname } = url;
     const workerOrigin = url.origin;
     const PROXY_PASSWORD = env.PROXY_PASSWORD || DEFAULT_PROXY_PASSWORD;
 
